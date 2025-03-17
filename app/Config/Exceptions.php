@@ -9,19 +9,11 @@ use Psr\Log\LogLevel;
 use Throwable;
 
 /**
- * Setup how the exception handler works.
+ * Setup how the exception handler works.No
  */
 class Exceptions extends BaseConfig
 {
-    /**
-     * --------------------------------------------------------------------------
-     * LOG EXCEPTIONS?
-     * --------------------------------------------------------------------------
-     * If true, then exceptions will be logged
-     * through Services::Log.
-     *
-     * Default: true
-     */
+
     public bool $log = true;
 
     /**
@@ -35,15 +27,7 @@ class Exceptions extends BaseConfig
      */
     public array $ignoreCodes = [404];
 
-    /**
-     * --------------------------------------------------------------------------
-     * Error Views Path
-     * --------------------------------------------------------------------------
-     * This is the path to the directory that contains the 'cli' and 'html'
-     * directories that hold the views used to generate errors.
-     *
-     * Default: APPPATH.'Views/errors'
-     */
+
     public string $errorViewPath = APPPATH . 'Views/errors';
 
     /**
@@ -58,26 +42,10 @@ class Exceptions extends BaseConfig
      */
     public array $sensitiveDataInTrace = [];
 
-    /**
-     * --------------------------------------------------------------------------
-     * WHETHER TO THROW AN EXCEPTION ON DEPRECATED ERRORS
-     * --------------------------------------------------------------------------
-     * If set to `true`, DEPRECATED errors are only logged and no exceptions are
-     * thrown. This option also works for user deprecations.
-     */
+  
     public bool $logDeprecations = true;
 
-    /**
-     * --------------------------------------------------------------------------
-     * LOG LEVEL THRESHOLD FOR DEPRECATIONS
-     * --------------------------------------------------------------------------
-     * If `$logDeprecations` is set to `true`, this sets the log level
-     * to which the deprecation will be logged. This should be one of the log
-     * levels recognized by PSR-3.
-     *
-     * The related `Config\Logger::$threshold` should be adjusted, if needed,
-     * to capture logging the deprecations.
-     */
+    
     public string $deprecationLogLevel = LogLevel::WARNING;
 
     /*
@@ -99,8 +67,60 @@ class Exceptions extends BaseConfig
      *          return new \App\Libraries\MyExceptionHandler();
      *      }
      */
-    public function handler(int $statusCode, Throwable $exception): ExceptionHandlerInterface
-    {
-        return new ExceptionHandler($this);
+public function handler(int $statusCode, Throwable $exception): ExceptionHandlerInterface
+{
+    // Asignar nivel de log correcto
+    $logLevel = ($statusCode >= 500) ? 'critical' : (($statusCode == 404) ? 'error' : 'warning');
+
+    // Registrar el error en los logs
+    log_message($logLevel, "💥 [ERROR] {$exception->getMessage()} - Code: {$statusCode}");
+
+    // Obtener la instancia de la respuesta
+    $response = service('response');
+
+    // Si es una petición AJAX o se espera JSON, devolver JSON
+    if (service('request')->isAJAX() || $this->isJsonExpected()) {
+        $jsonResponse = [
+            'success' => false,
+            'error' => $exception->getMessage(),
+            'code' => $statusCode,
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'trace' => $exception->getTrace() // Opcional: solo en desarrollo
+        ];
+
+        // Establecer la respuesta JSON
+        $response->setStatusCode($statusCode)->setJSON($jsonResponse);
+
+        // Enviar la respuesta y terminar la ejecución
+        $response->send();
+        exit;
     }
+
+    // Si es un error 404, forzar una respuesta JSON manualmente
+    if ($statusCode == 404) {
+        $jsonResponse = [
+            'success' => false,
+            'error' => 'Página no encontrada',
+            'code' => 404
+        ];
+
+        // Establecer la respuesta JSON
+        $response->setStatusCode(404)->setJSON($jsonResponse);
+
+        // Enviar la respuesta y terminar la ejecución
+        $response->send();
+        exit;
+    }
+
+    // Si no es AJAX ni un 404, usar el manejador por defecto
+    return new ExceptionHandler($this);
+}
+
+private function isJsonExpected(): bool
+{
+    $request = service('request');
+    $acceptHeader = $request->getHeaderLine('Accept');
+    return strpos($acceptHeader, 'application/json') !== false;
+}
 }
