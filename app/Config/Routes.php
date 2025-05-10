@@ -1,11 +1,11 @@
 <?php
 
 use CodeIgniter\Router\RouteCollection;
+use App\Controllers\AuthController;
 
 /**
  * @var RouteCollection $routes
  */
 $routes->get('/', 'Home::index');
-$routes->get('test-cors', function () {
-    return response()->setJSON(['message' => 'CORS funciona correctamente']);
-});
+$routes->post('auth/register', 'AuthController::register');
+
